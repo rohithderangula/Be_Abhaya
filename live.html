@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Tracking</title>
+    <!-- Google Maps API -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD8ZiUi9CYVMAGCLjklrjFx-k7q2bkbVmM"></script>
+    <!-- Inline CSS for page styling -->
+    <style>
+        /* Basic page styling */
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            height: 100%;
+            background-color: #f0f4f7;
+        }
+
+        .container {
+            text-align: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        /* Styling for map container */
+        .map-container {
+            width: 100%;
+            height: 400px;
+            margin-bottom: 20px;
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        /* Button styling */
+        .track-btn, .stop-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            margin: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            color: white;
+        }
+
+        .track-btn {
+            background-color: #4caf50;
+        }
+
+        .stop-btn {
+            background-color: #f44336;
+        }
+
+        /* Status message styling */
+        .status-message {
+            font-size: 16px;
+            margin-top: 10px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Live Location Tracking</h1>
+        <div id="map" class="map-container"></div>
+        <button id="trackButton" class="track-btn">Start Tracking</button>
+        <button id="stopButton" class="stop-btn">Stop Tracking</button>
+        <p id="status" class="status-message">Click "Start Tracking" to get your live location.</p>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        let map, marker, watchID;
+
+        function initMap(latitude, longitude) {
+            const location = { lat: latitude, lng: longitude };
+
+            // Initialize the Google Map centered at the current location
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 15,
+                center: location
+            });
+
+            // Add a marker on the map at the current location
+            marker = new google.maps.Marker({
+                position: location,
+                map: map
+            });
+        }
+
+        function updateLocation(latitude, longitude) {
+            const newLocation = { lat: latitude, lng: longitude };
+            map.setCenter(newLocation);
+            marker.setPosition(newLocation);
+        }
+
+        function startTracking() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        const { latitude, longitude } = position.coords;
+                        initMap(latitude, longitude);  // Initialize map with the user's current location
+                        document.getElementById('status').textContent = `Tracking: Latitude: ${latitude}, Longitude: ${longitude}`;
+
+                        // Start watching the location updates
+                        watchID = navigator.geolocation.watchPosition(
+                            position => {
+                                const { latitude, longitude } = position.coords;
+                                updateLocation(latitude, longitude);
+                                document.getElementById('status').textContent = `Tracking: Latitude: ${latitude}, Longitude: ${longitude}`;
+                            },
+                            error => {
+                                document.getElementById('status').textContent = 'Unable to retrieve location';
+                            },
+                            { enableHighAccuracy: true }
+                        );
+                    },
+                    error => {
+                        document.getElementById('status').textContent = 'Unable to retrieve current location';
+                    }
+                );
+            } else {
+                alert("Geolocation is not supported by this browser.");
+            }
+        }
+
+        function stopTracking() {
+            if (watchID) {
+                navigator.geolocation.clearWatch(watchID);
+                document.getElementById('status').textContent = 'Tracking stopped';
+            }
+        }
+
+        // Automatically set the current location when the page loads
+        window.onload = () => {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        const { latitude, longitude } = position.coords;
+                        initMap(latitude, longitude);  // Initialize map with the user's current location
+                        document.getElementById('status').textContent = `Current Location: Latitude: ${latitude}, Longitude: ${longitude}`;
+                    },
+                    error => {
+                        document.getElementById('status').textContent = 'Unable to retrieve current location';
+                        initMap(0, 0);  // Default location if geolocation fails
+                    }
+                );
+            } else {
+                alert("Geolocation is not supported by this browser.");
+                initMap(0, 0);  // Default location if geolocation is not supported
+            }
+        };
+
+        document.getElementById('trackButton').addEventListener('click', startTracking);
+        document.getElementById('stopButton').addEventListener('click', stopTracking);
+    </script>
+</body>
+</html>

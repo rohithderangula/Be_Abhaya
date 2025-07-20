@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Streaming</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+
+        header {
+            background-color: #333;
+            color: white;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        main {
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .info-card {
+            margin-bottom: 1rem;
+            animation: fadeIn 1s ease-in-out;
+        }
+
+        .info-card h5 {
+            margin-bottom: 0.5rem;
+        }
+
+        .video-container {
+            margin-bottom: 1rem;
+        }
+
+        video {
+            width: 100%;
+            max-width: 600px;
+            border: 2px solid #333;
+        }
+
+        audio {
+            width: 100%;
+            max-width: 600px;
+            border: 2px solid #333;
+            margin-top: 1rem; /* Add margin to separate it from the video */
+        }
+
+        button {
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+            color: white;
+            background-color: #007bff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0.5rem;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #d6d6d6;
+            cursor: not-allowed;
+        }
+
+        .upload-button {
+            background-color: #28a745;
+        }
+
+        .upload-button:hover {
+            background-color: #218838;
+        }
+
+        .animated-button {
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes fadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+
+        footer {
+            background-color: #333;
+            color: white;
+            padding: 1rem;
+            text-align: center;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Live Streaming Platform</h1>
+    </header>
+    <main>
+        <section id="info">
+            <div class="container">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card info-card">
+                            <div class="card-body">
+                                <h5 class="card-title">Video Streaming</h5>
+                                <p class="card-text">Stream live video to your audience with high quality. Click 'Start Streaming' to begin. Make sure your camera and microphone are working correctly.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card info-card">
+                            <div class="card-body">
+                                <h5 class="card-title">Audio Streaming</h5>
+                                <p class="card-text">Broadcast audio alongside your video feed. Ensure your microphone is capturing clear audio. Use 'Start Streaming' to include audio in your live stream.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <section id="streaming">
+            <div class="video-container">
+                <video id="video" controls autoplay></video>
+                <audio id="audio" controls autoplay></audio>
+            </div>
+            <button id="startStreaming">Start Streaming</button>
+            <button id="stopStreaming">Stop Streaming</button>
+            <button id="upload" class="upload-button animated-button">Upload</button>
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2024 Live Streaming Platform. All rights reserved.</p>
+    </footer>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const videoElement = document.getElementById('video');
+            const audioElement = document.getElementById('audio');
+            const startButton = document.getElementById('startStreaming');
+            const stopButton = document.getElementById('stopStreaming');
+            const uploadButton = document.getElementById('upload');
+
+            const signalingServerUrl = 'ws://localhost:8080'; // URL of your signaling server
+            const ws = new WebSocket(signalingServerUrl);
+
+            let localStream = null;
+            let peerConnection = null;
+
+            // Configuration for WebRTC
+            const config = {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' }
+                ]
+            };
+
+            ws.onmessage = async (event) => {
+                const message = JSON.parse(event.data);
+
+                if (message.offer) {
+                    if (!peerConnection) {
+                        peerConnection = new RTCPeerConnection(config);
+                        peerConnection.onicecandidate = (event) => {
+                            if (event.candidate) {
+                                ws.send(JSON.stringify({ ice: event.candidate }));
+                            }
+                        };
+                        peerConnection.ontrack = (event) => {
+                            if (event.streams[0].getVideoTracks().length > 0) {
+                                videoElement.srcObject = event.streams[0];
+                            }
+                            if (event.streams[0].getAudioTracks().length > 0) {
+                                audioElement.srcObject = event.streams[0];
+                            }
+                        };
+                    }
+
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(message.offer));
+                    const answer = await peerConnection.createAnswer();
+                    await peerConnection.setLocalDescription(answer);
+                    ws.send(JSON.stringify({ answer: answer }));
+                }
+
+                if (message.answer) {
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(message.answer));
+                }
+
+                if (message.ice) {
+                    try {
+                        await peerConnection.addIceCandidate(new RTCIceCandidate(message.ice));
+                    } catch (error) {
+                        console.error('Error adding received ICE candidate:', error);
+                    }
+                }
+            };
+
+            startButton.addEventListener('click', async () => {
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    videoElement.srcObject = localStream;
+                    audioElement.srcObject = localStream;
+
+                    peerConnection = new RTCPeerConnection(config);
+                    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+                    peerConnection.onicecandidate = (event) => {
+                        if (event.candidate) {
+                            ws.send(JSON.stringify({ ice: event.candidate }));
+                        }
+                    };
+
+                    peerConnection.ontrack = (event) => {
+                        if (event.streams[0].getVideoTracks().length > 0) {
+                            videoElement.srcObject = event.streams[0];
+                        }
+                        if (event.streams[0].getAudioTracks().length > 0) {
+                            audioElement.srcObject = event.streams[0];
+                        }
+                    };
+
+                    const offer = await peerConnection.createOffer();
+                    await peerConnection.setLocalDescription(offer);
+                    ws.send(JSON.stringify({ offer: offer }));
+
+                    startButton.disabled = true;
+                    stopButton.disabled = false;
+                } catch (error) {
+                    console.error('Error starting streaming:', error);
+                }
+            });
+
+            stopButton.addEventListener('click', () => {
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                    videoElement.srcObject = null;
+                    audioElement.srcObject = null;
+                }
+
+                if (peerConnection) {
+                    peerConnection.close();
+                    peerConnection = null;
+                }
+
+                startButton.disabled = false;
+                stopButton.disabled = true;
+            });
+
+            uploadButton.addEventListener('click', async () => {
+                if (!localStream) {
+                    alert('No streaming active. Please start streaming first.');
+                    return;
+                }
+
+                // Convert video and audio stream to blob
+                const stream = localStream;
+                const recordedChunks = [];
+                const mediaRecorder = new MediaRecorder(stream);
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        recordedChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const formData = new FormData();
+                    formData.append('video', blob, 'stream.webm');
+
+                    try {
+                        const response = await fetch('/upload', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const result = await response.json();
+                        alert(`Upload complete. Status: ${result.status}`);
+                    } catch (error) {
+                        console.error('Error uploading video:', error);
+                    }
+                };
+
+                mediaRecorder.start();
+                setTimeout(() => mediaRecorder.stop(), 5000); // Record for 5 seconds
+            });
+        });
+    </script>
+</body>
+</html>
